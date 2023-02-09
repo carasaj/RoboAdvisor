@@ -112,6 +112,42 @@ In this section, you will create an Amazon Lambda function that will validate th
 """
 
 
+def validate_data(age, investment_amount, intent_request):
+    """
+    Validates the data provided by the user.
+    """
+
+    # Validate that the user is over 21 years old
+    if age is not None:
+        if int(age) < 21 or int(age) > 65:
+            return build_validation_result(
+                False,
+                "age",
+                "You should be between the ages of 21 and 65 to use this service  "
+                "please provide an age.",
+            )
+
+    # Validate the investment amount, it should be > 0
+    if investment_amount is not None:
+        investment_amount = int(investment_amount)  # Since parameters are strings it's important to cast values
+        if investment_amount <= 5000:
+            return build_validation_result(
+                False,
+                "investment_amount",
+                "The amount to invest should be greater than 5000, "
+                "please provide a correct amount to invest.",
+            )
+#    if risk_level is not None:
+ #       while risk_level not in ['None', 'Very Low', 'Low', 'Medium', 'High']:
+  #          return build_validation_result(
+   #             False,
+    #            "risk_level",
+     #           "The amount risk level should be None, Very Low, Low, Medium, or High; "
+      #          "please provide a correct amount to invest."
+       #     )
+    # A True results is returned if age or amount are valid
+    return build_validation_result(True, None, None)
+
 ### Intents Handlers ###
 def recommend_portfolio(intent_request):
     """
@@ -124,7 +160,53 @@ def recommend_portfolio(intent_request):
     risk_level = get_slots(intent_request)["riskLevel"]
     source = intent_request["invocationSource"]
 
-    # YOUR CODE GOES HERE!
+    if source == "DialogCodeHook":
+        # This code performs basic validation on the supplied input slots.
+
+        # Gets all the slots
+        slots = get_slots(intent_request)
+
+        validation_result = validate_data(age, investment_amount, intent_request)
+
+        if not validation_result["isValid"]:
+            slots[validation_result["violatedSlot"]] = None  # Cleans invalid slot
+
+            # Returns an elicitSlot dialog to request new data for the invalid slot
+            return elicit_slot(
+                intent_request["sessionAttributes"],
+                intent_request["currentIntent"]["name"],
+                slots,
+                validation_result["violatedSlot"],
+                validation_result["message"],
+            )
+            # Fetch current session attributes
+        output_session_attributes = intent_request["sessionAttributes"]
+         # Once all slots are valid, a delegate dialog is returned to Lex to choose the next course of action.
+        return delegate(output_session_attributes, get_slots(intent_request))
+
+
+    if risk_level == None:
+        investment_suggestion = ""
+    if risk_level == "none":
+        investment_suggestion = "100% bonds (AGG), 0% equities (SPY)"
+    elif risk_level == "low":
+        investment_suggestion = "60% bonds (AGG), 40% equities (SPY)"
+    elif risk_level == "medium":
+        investment_suggestion = "40% bonds (AGG), 60% equities (SPY)"
+    elif risk_level == "high":
+        investment_suggestion = "20% bonds (AGG), 80% equities (SPY)"
+
+    # Return a message with conversion's result.
+    return close(
+        intent_request["sessionAttributes"],
+        "Fulfilled",
+        {
+            "contentType": "PlainText",
+            "content": """Thanks for using this service, {}. In your circumstances, the recommendation would be this investment portfolio {}.
+            """.format(
+                first_name, investment_suggestion),
+        },
+    )
 
 
 ### Intents Dispatcher ###
@@ -150,3 +232,4 @@ def lambda_handler(event, context):
     """
 
     return dispatch(event)
+
